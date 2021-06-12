@@ -109,7 +109,7 @@ void startRecording(){
   bufferQueue = new std::queue<uint16_t>;
   xTaskCreate(recordData, "recordData", 1024 * 2, NULL, 3, &taskHandler1);
   xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 2, &taskHandler2);
-  xTaskCreate(logData, "logData", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  //xTaskCreate(logData, "logData", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
 
 void finishRecording(){
@@ -161,19 +161,6 @@ void deviceCancel(void *arg){
   vTaskDelete(NULL);
 }
 
-
-// void i2s_cancel(void *arg){
-//   vTaskDelay(2000);
-//   Serial.println("*** Recording End 2 ***");
-
-
-
-//   vTaskDelete(taskHandler);
-//   //i2s_driver_uninstall(I2S_PORT);
-//   vTaskDelete(NULL);
-// }
-
-
 void recordData(void *arg){
   Serial.println("Test1");
   timer = micros();
@@ -182,8 +169,6 @@ void recordData(void *arg){
   counter = 0;
   while(1){
     //if(   ((micros() - timer) / 1000.00)/1000.00 >= 1 / (float)(sampleRatePerSec)){//+10.7
-
-
       timer = micros();
       int sample = adc1_get_raw(ADC1_CHANNEL_7);
       // Serial.print("R");
@@ -206,14 +191,10 @@ void transmitData(void *arg){
     if(bufferQueue->size() > 0){
     flag = 1;
     int sample = (uint32_t)bufferQueue->front();  
-
     SerialBT.println(sample);
-
     //Serial.print("TS");
     //Serial.println(sample);
-
     bufferQueue->pop();
-
     time2 = micros();
     }
     else{
@@ -228,11 +209,6 @@ void transmitData(void *arg){
 
 void loop()
 {
-  //     if(bufferQueue.size() > 0){
-  //       int sample = (uint32_t)bufferQueue.front();
-  //       SerialBT.println(sample);
-  //       Serial.println(sample);
-  //     }
 }
 
 

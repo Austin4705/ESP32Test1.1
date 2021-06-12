@@ -4,13 +4,12 @@ void loop()
 }
 
 #include <Arduino.h>
-#include "I2SSampler.h"
+// #include "I2SSampler.h"
 #include "BluetoothSerial.h"
 #include <driver/i2s.h>
 #include "esp_adc_cal.h"
 
 BluetoothSerial SerialBT;
-I2SSampler *sampler = NULL;
 
 // calibration values for the adc
 #define DEFAULT_VREF 1100
@@ -20,7 +19,7 @@ void initBT();
 void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param);
 void startRecording();
 void finishRecording();
-//void i2s_adc(void *arg);
+void i2s_adc(void *arg);
 //void i2sInit();
 //void i2s_adc_data_scale(uint8_t * d_buff, uint8_t* s_buff, uint32_t len);
 void i2s_cancel(void *arg);
@@ -34,37 +33,27 @@ TaskHandle_t taskHandler = NULL;
 void setup() {
   Serial.begin(115200);
 
-  // //Range 0-4096
-  // adc1_config_width(ADC_WIDTH_BIT_12);
-  // // full voltage range
-  // adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
+  //Range 0-4096
+  adc1_config_width(ADC_WIDTH_BIT_12);
+  // full voltage range
+  adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
 
-  // // check to see what calibration is available
-  // if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK)
-  // {
-  //   Serial.println("Using voltage ref stored in eFuse");
-  // }
-  // if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK)
-  // {
-  //   Serial.println("Using two point values from eFuse");
-  // }
-  // if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_DEFAULT_VREF) == ESP_OK)
-  // {
-  //   Serial.println("Using default VREF");
-  // }
-  // //Characterize ADC
-  // adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
-  // esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
-
-  // create our sampler
-  sampler = new I2SSampler();
-  // set up the sample writer task
-  TaskHandle_t writerTaskHandle;
-  xTaskCreatePinnedToCore(writerTask, "Writer Task", 8192, sampler, 1, &writerTaskHandle, 1);
-  // start sampling
-  sampler->start(writerTaskHandle);
-
-
+  // check to see what calibration is available
+  if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK)
+  {
+    Serial.println("Using voltage ref stored in eFuse");
+  }
+  if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_TP) == ESP_OK)
+  {
+    Serial.println("Using two point values from eFuse");
+  }
+  if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_DEFAULT_VREF) == ESP_OK)
+  {
+    Serial.println("Using default VREF");
+  }
+  //Characterize ADC
+  adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
+  esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
   initBT();
   }
 
@@ -110,7 +99,7 @@ void startRecording(){
   Serial.println(" *** Recording Start ***");
   // i2s_read_buff = (char*) calloc(I2S_READ_LEN, sizeof(char));
   // flash_write_buff = (uint8_t*) calloc(I2S_READ_LEN, sizeof(char));
-  xTaskCreate(writerTask, "i2s_adc", 1024 * 2, NULL, 1, &taskHandler);
+  xTaskCreate(i2s_adc, "i2s_adc", 1024 * 2, NULL, 1, &taskHandler);
 }
 
 void finishRecording(){
@@ -136,54 +125,39 @@ void i2s_cancel(void *arg){
   vTaskDelete(NULL);
 }
 
-// Task to write samples to our server
-void writerTask(void *param)
-{
-  sampler = (I2SSampler *)param;
-  const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
-  while (true)
-  {
-    // wait for some samples to save
-    uint32_t ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
-    if (ulNotificationValue > 0)
-    {
-      // send them off to the server
-       SerialBT.println((int)sampler->sampleBuffer());
-    }
-  }
-}
+// 
 
 //Deprecated
 
-// void i2s_adc(void *arg)
-// {
-//     // i2sInit();
-//     // size_t bytes_read;
-//     // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-//     // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
+void i2s_adc(void *arg)
+{
+    // i2sInit();
+    // size_t bytes_read;
+    // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
+    // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
     
-//     Serial.println(" *** Recording Start *** ");
-//     while (1) {
+    Serial.println(" *** Recording Start *** ");
+    while (1) {
 
-//         // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-//         // i2s_adc_data_scale(flash_write_buff, (uint8_t*)i2s_read_buff, I2S_READ_LEN);
-//         // SerialBT.write((const byte*) flash_write_buff, I2S_READ_LEN);
+        // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
+        // i2s_adc_data_scale(flash_write_buff, (uint8_t*)i2s_read_buff, I2S_READ_LEN);
+        // SerialBT.write((const byte*) flash_write_buff, I2S_READ_LEN);
 
-//         // for a more accurate reading you could read multiple samples here
+        // for a more accurate reading you could read multiple samples here
 
-//         // read a sample from the adc using GPIO35
-//         int sample = adc1_get_raw(ADC1_CHANNEL_7);
-//         // get the calibrated value
-//         Serial.println(sample);
-//         //Serial.printf("Sample=%d, mV=%d\n", sample, milliVolts);
+        // read a sample from the adc using GPIO35
+        int sample = adc1_get_raw(ADC1_CHANNEL_7);
+        // get the calibrated value
+        Serial.println(sample);
+        //Serial.printf("Sample=%d, mV=%d\n", sample, milliVolts);
 
 
-//         //SerialBT.write(sample);
-//         //ets_printf("Never Used Stack Size: %u\n", uxTaskGetStackHighWaterMark(NULL));
-//     }
+        SerialBT.write(sample);
+        //ets_printf("Never Used Stack Size: %u\n", uxTaskGetStackHighWaterMark(NULL));
+    }
 
-//     vTaskDelete(NULL);
-// }
+    vTaskDelete(NULL);
+}
 
 // void i2sInit(){
 //   i2s_config_t i2s_config = {
@@ -220,6 +194,21 @@ void writerTask(void *param)
 //         d_buff[j++] = dac_value * 256 / 2048;
 //     }
 // }
-
+// Task to write samples to our server
+// void writerTask(void *param)
+// {
+//   sampler = (I2SSampler *)param;
+//   const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
+//   while (true)
+//   {
+//     // wait for some samples to save
+//     uint32_t ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
+//     if (ulNotificationValue > 0)
+//     {
+//       // send them off to the server
+//        SerialBT.println((int)sampler->sampleBuffer());
+//     }
+//   }
+// }
 
 

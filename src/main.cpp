@@ -8,10 +8,12 @@ void loop()
 #include "BluetoothSerial.h"
 #include <driver/i2s.h>
 #include "esp_adc_cal.h"
+#include <queue>
 
 BluetoothSerial SerialBT;
 
 // calibration values for the adc
+#define sampleRatePerSec 1000
 #define DEFAULT_VREF 1100
 esp_adc_cal_characteristics_t *adc_chars;
 
@@ -19,24 +21,26 @@ void initBT();
 void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param);
 void startRecording();
 void finishRecording();
-void i2s_adc(void *arg);
-//void i2sInit();
-//void i2s_adc_data_scale(uint8_t * d_buff, uint8_t* s_buff, uint32_t len);
-void i2s_cancel(void *arg);
-void writerTask(void *param);
+void recordData(void *arg);
+void transmitData(void *arg);
 
 
-char* i2s_read_buff;
-uint8_t* flash_write_buff;
-TaskHandle_t taskHandler = NULL;
+
+std::queue<uint16_t> * bufferQueue;
+TaskHandle_t taskHandler1 = NULL;
+TaskHandle_t taskHandler2 = NULL;
 
 void setup() {
   Serial.begin(115200);
+  initBT();
+
+  //////////////////////////Init ADC\\\\\\\\\\\\\\\\\\\\\\\
 
   //Range 0-4096
   adc1_config_width(ADC_WIDTH_BIT_12);
   // full voltage range
   adc1_config_channel_atten(ADC1_CHANNEL_7, ADC_ATTEN_DB_11);
+
 
   // check to see what calibration is available
   if (esp_adc_cal_check_efuse(ESP_ADC_CAL_VAL_EFUSE_VREF) == ESP_OK)
@@ -54,7 +58,11 @@ void setup() {
   //Characterize ADC
   adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
-  initBT();
+
+  /////////////////Init ADC\\\\\\\\\\\\\\\\\\\\\\\\
+
+  std::queue<uint16_t> internal;
+  bufferQueue = &internal;
   }
 
 void initBT(){
@@ -96,68 +104,78 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
 }
 
 void startRecording(){
-  Serial.println(" *** Recording Start ***");
-  // i2s_read_buff = (char*) calloc(I2S_READ_LEN, sizeof(char));
-  // flash_write_buff = (uint8_t*) calloc(I2S_READ_LEN, sizeof(char));
-  xTaskCreate(i2s_adc, "i2s_adc", 1024 * 2, NULL, 1, &taskHandler);
+  Serial.println("*** Recording Start ***");
+  xTaskCreate(recordData, "recordData", 1024 * 2, NULL, 1, &taskHandler1);
+  xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 1, &taskHandler2);
 }
 
 void finishRecording(){
-  Serial.println(" *** Recording End ***");
-  xTaskCreate(i2s_cancel, "i2s_cancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  Serial.println("*** Recording End ***");
+  vTaskDelete(taskHandler1);
+  vTaskDelete(taskHandler2);
+
+  //xTaskCreate(i2s_cancel, "i2s_cancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
 
-void i2s_cancel(void *arg){
-  vTaskDelay(2000);
-  Serial.println(" *** Recording End 2 *** ");
-  // if(i2s_read_buff != NULL){
-  //   free(i2s_read_buff);
-  //   i2s_read_buff = NULL;
-  // }
+// void i2s_cancel(void *arg){
+//   vTaskDelay(2000);
+//   Serial.println("*** Recording End 2 ***");
 
-  // if(flash_write_buff != NULL){
-  //  free(flash_write_buff);
-  //  flash_write_buff = NULL; 
-  // }
 
-  vTaskDelete(taskHandler);
-  //i2s_driver_uninstall(I2S_PORT);
+//   vTaskDelete(taskHandler);
+//   //i2s_driver_uninstall(I2S_PORT);
+//   vTaskDelete(NULL);
+// }
+
+
+void recordData(void *arg){
+  unsigned long int time = millis();
+  while(1){
+    if(millis() - time >= 1 / sampleRatePerSec){
+      int sample = adc1_get_raw(ADC1_CHANNEL_7);
+      bufferQueue->push((uint32_t)sample);
+    }
+  }
   vTaskDelete(NULL);
 }
+
+void transmitData(void *arg){
+  while (1) {
+      if(bufferQueue->size() > 0){
+        int sample = (uint32_t)bufferQueue->front();
+        SerialBT.println(sample);
+        Serial.println(sample);
+      }
+  }
+  vTaskDelete(NULL);
+}
+
+
+
+
+
+
+
+
+
+
 
 // 
 
 //Deprecated
 
-void i2s_adc(void *arg)
-{
-    // i2sInit();
-    // size_t bytes_read;
-    // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-    // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-    
-    Serial.println(" *** Recording Start *** ");
-    while (1) {
+// void i2s_adc(void *arg)
+// {
+//     Serial.println(" *** Recording Start *** ");
+//     while (1) {
+//         // for a more accurate reading you could read multiple samples here
 
-        // i2s_read(I2S_PORT, (void*) i2s_read_buff, I2S_READ_LEN, &bytes_read, portMAX_DELAY);
-        // i2s_adc_data_scale(flash_write_buff, (uint8_t*)i2s_read_buff, I2S_READ_LEN);
-        // SerialBT.write((const byte*) flash_write_buff, I2S_READ_LEN);
+//         int sample = adc1_get_raw(ADC1_CHANNEL_7);
+//         Serial.println(sample);
+//     }
 
-        // for a more accurate reading you could read multiple samples here
-
-        // read a sample from the adc using GPIO35
-        int sample = adc1_get_raw(ADC1_CHANNEL_7);
-        // get the calibrated value
-        Serial.println(sample);
-        //Serial.printf("Sample=%d, mV=%d\n", sample, milliVolts);
-
-
-        SerialBT.write(sample);
-        //ets_printf("Never Used Stack Size: %u\n", uxTaskGetStackHighWaterMark(NULL));
-    }
-
-    vTaskDelete(NULL);
-}
+//     vTaskDelete(NULL);
+// }
 
 // void i2sInit(){
 //   i2s_config_t i2s_config = {

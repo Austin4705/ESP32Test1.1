@@ -23,7 +23,6 @@ void deviceCancel(void *arg);
 
 
 std::queue<uint16_t> bufferQueue;
-bool flag = true;
 
 TaskHandle_t taskHandler1 = NULL;
 TaskHandle_t taskHandler2 = NULL;
@@ -110,7 +109,6 @@ void startRecording(){
 void finishRecording(){
   Serial.println("*** Recording End ***");
   vTaskDelete(taskHandler1);
-  flag = false;
   xTaskCreate(deviceCancel, "deviceCancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
 
@@ -156,22 +154,22 @@ void recordData(void *arg){
 
 void transmitData(void *arg){
   Serial.println("Test2");
-  while (flag) {
+  while (1) {
     do{
     if(bufferQueue.size() > 0){
-    unsigned long int time = micros();
+    //unsigned long int time = micros();
 
     int sample = (uint32_t)bufferQueue.front();
     SerialBT.println(sample);
 
     //Serial.print("TS");
-    //Serial.println(sample);
+    Serial.println(sample);
 
     bufferQueue.pop();
 
-    Serial.print((micros() - time)/1000);
-    Serial.print(", ");
-    Serial.println(bufferQueue.size());
+    // Serial.print((micros() - time)/1000);
+    // Serial.print(", ");
+    // Serial.println(bufferQueue.size());
     }
     else{
       //Serial.print("TB");
@@ -181,7 +179,7 @@ void transmitData(void *arg){
     } while (bufferQueue.size() > 0);
   }
   SerialBT.println("***Transmition Done***");
-  vTaskDelete(taskHandler2);
+  vTaskDelete(NULL);
 }
 
 void loop()

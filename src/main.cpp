@@ -1,8 +1,3 @@
-void loop()
-{
-
-}
-
 #include <Arduino.h>
 // #include "I2SSampler.h"
 #include "BluetoothSerial.h"
@@ -23,10 +18,11 @@ void startRecording();
 void finishRecording();
 void recordData(void *arg);
 void transmitData(void *arg);
+void deviceCancel(void *arg);
 
 
 
-std::queue<uint16_t> * bufferQueue;
+std::queue<uint16_t> bufferQueue;
 TaskHandle_t taskHandler1 = NULL;
 TaskHandle_t taskHandler2 = NULL;
 
@@ -34,7 +30,7 @@ void setup() {
   Serial.begin(115200);
   initBT();
 
-  //////////////////////////Init ADC\\\\\\\\\\\\\\\\\\\\\\\
+  //------------------------Init ADC------------------------
 
   //Range 0-4096
   adc1_config_width(ADC_WIDTH_BIT_12);
@@ -59,10 +55,10 @@ void setup() {
   adc_chars = (esp_adc_cal_characteristics_t *)calloc(1, sizeof(esp_adc_cal_characteristics_t));
   esp_adc_cal_characterize(ADC_UNIT_1, ADC_ATTEN_DB_11, ADC_WIDTH_BIT_12, DEFAULT_VREF, adc_chars);
 
-  /////////////////Init ADC\\\\\\\\\\\\\\\\\\\\\\\\
+  //------------------------Init ADC------------------------
 
-  std::queue<uint16_t> internal;
-  bufferQueue = &internal;
+  // std::queue<uint16_t> internal;
+  // bufferQueue = &internal;
   }
 
 void initBT(){
@@ -76,7 +72,7 @@ void initBT(){
 
   SerialBT.register_callback(btCallback);
   Serial.println("==========================================================");
-  Serial.println("The device started, now you can pair it with bluetooth-001");
+  Serial.println("The device started, now you can pair it with bluetooth-003");
   Serial.println("==========================================================");
 }
 
@@ -106,20 +102,27 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
 void startRecording(){
   Serial.println("*** Recording Start ***");
   xTaskCreate(recordData, "recordData", 1024 * 2, NULL, 1, &taskHandler1);
-  xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 1, &taskHandler2);
+  xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 2, &taskHandler2);
 }
 
 void finishRecording(){
   Serial.println("*** Recording End ***");
   vTaskDelete(taskHandler1);
-  vTaskDelete(taskHandler2);
 
-  //xTaskCreate(i2s_cancel, "i2s_cancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  xTaskCreate(deviceCancel, "deviceCancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
+
+void deviceCancel(void *arg){
+  vTaskDelay(2000);
+  vTaskDelete(taskHandler2);
+  vTaskDelete(NULL);
+}
+
 
 // void i2s_cancel(void *arg){
 //   vTaskDelay(2000);
 //   Serial.println("*** Recording End 2 ***");
+
 
 
 //   vTaskDelete(taskHandler);
@@ -129,28 +132,55 @@ void finishRecording(){
 
 
 void recordData(void *arg){
+  Serial.println("Test1");
   unsigned long int time = millis();
   while(1){
     if(millis() - time >= 1 / sampleRatePerSec){
+      //Serial.println(millis() - time);
+      time = millis();
       int sample = adc1_get_raw(ADC1_CHANNEL_7);
-      bufferQueue->push((uint32_t)sample);
+      // Serial.print("R");
+      //Serial.println(sample);
+      bufferQueue.push((uint32_t)sample);
     }
+    vTaskDelay(portTICK_PERIOD_MS / 2);
+
   }
   vTaskDelete(NULL);
 }
 
 void transmitData(void *arg){
+  Serial.println("Test2");
   while (1) {
-      if(bufferQueue->size() > 0){
-        int sample = (uint32_t)bufferQueue->front();
+      do
+      {
+        if(bufferQueue.size() > 0){
+        int sample = (uint32_t)bufferQueue.front();
         SerialBT.println(sample);
-        Serial.println(sample);
-      }
+        Serial.println(bufferQueue.size());
+        
+        //Serial.print("TS");
+        //Serial.println(sample);
+        bufferQueue.pop();
+        }
+        else{
+          //Serial.print("TB");
+          //Serial.println(bufferQueue.size());
+        }
+      } while (bufferQueue.size() > 0);
+      vTaskDelay(portTICK_PERIOD_MS/2);
   }
   vTaskDelete(NULL);
 }
 
-
+void loop()
+{
+  //     if(bufferQueue.size() > 0){
+  //       int sample = (uint32_t)bufferQueue.front();
+  //       SerialBT.println(sample);
+  //       Serial.println(sample);
+  //     }
+}
 
 
 

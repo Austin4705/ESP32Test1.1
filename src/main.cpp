@@ -23,6 +23,8 @@ void deviceCancel(void *arg);
 
 
 std::queue<uint16_t> bufferQueue;
+bool flag = true;
+
 TaskHandle_t taskHandler1 = NULL;
 TaskHandle_t taskHandler2 = NULL;
 
@@ -108,7 +110,7 @@ void startRecording(){
 void finishRecording(){
   Serial.println("*** Recording End ***");
   vTaskDelete(taskHandler1);
-
+  flag = false;
   xTaskCreate(deviceCancel, "deviceCancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
 
@@ -135,7 +137,7 @@ void recordData(void *arg){
   Serial.println("Test1");
   unsigned long int time = millis();
   while(1){
-    if( (millis() - time)/1000 >= 1 / sampleRatePerSec){
+    if( (millis() - time) / 1000.00 >= 1 / (float)sampleRatePerSec){
       // Serial.print(millis() - time);
       // Serial.print(", ");
       // Serial.println(bufferQueue.size());
@@ -146,7 +148,7 @@ void recordData(void *arg){
       //Serial.println(sample);
       bufferQueue.push((uint32_t)sample);
     }
-    vTaskDelay(portTICK_PERIOD_MS / 2);
+    vTaskDelay(portTICK_PERIOD_MS);
 
   }
   vTaskDelete(NULL);
@@ -154,29 +156,32 @@ void recordData(void *arg){
 
 void transmitData(void *arg){
   Serial.println("Test2");
-  while (1) {
+  while (flag) {
+    do{
     if(bufferQueue.size() > 0){
     unsigned long int time = micros();
 
     int sample = (uint32_t)bufferQueue.front();
     SerialBT.println(sample);
-    //Serial.println(bufferQueue.size());
 
     //Serial.print("TS");
-    Serial.println(sample);
-    
+    //Serial.println(sample);
+
     bufferQueue.pop();
-    // Serial.print((micros() - time)/1000);
-    // Serial.print(", ");
-    // Serial.println(bufferQueue.size());
+
+    Serial.print((micros() - time)/1000);
+    Serial.print(", ");
+    Serial.println(bufferQueue.size());
     }
     else{
       //Serial.print("TB");
       //Serial.println(bufferQueue.size());
     }
-    vTaskDelay(portTICK_PERIOD_MS/2);
+    vTaskDelay(portTICK_PERIOD_MS);
+    } while (bufferQueue.size() > 0);
   }
-  vTaskDelete(NULL);
+  SerialBT.println("***Transmition Done***");
+  vTaskDelete(taskHandler2);
 }
 
 void loop()

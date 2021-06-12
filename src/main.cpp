@@ -12,6 +12,10 @@ BluetoothSerial SerialBT;
 #define DEFAULT_VREF 1100
 esp_adc_cal_characteristics_t *adc_chars;
 
+
+std::queue<uint16_t> bufferQueue;
+bool flag = 0;
+
 void initBT();
 void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param);
 void startRecording();
@@ -20,12 +24,11 @@ void recordData(void *arg);
 void transmitData(void *arg);
 void deviceCancel(void *arg);
 
-
-
-std::queue<uint16_t> bufferQueue;
-
 TaskHandle_t taskHandler1 = NULL;
 TaskHandle_t taskHandler2 = NULL;
+unsigned long int timer = 0;
+unsigned long int counter = 0;
+unsigned long int startTime = 0;
 
 void setup() {
   Serial.begin(115200);
@@ -102,14 +105,15 @@ void btCallback(esp_spp_cb_event_t event, esp_spp_cb_param_t *param){
 
 void startRecording(){
   Serial.println("*** Recording Start ***");
-  xTaskCreate(recordData, "recordData", 1024 * 2, NULL, 1, &taskHandler1);
-  xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 2, &taskHandler2);
+  xTaskCreate(recordData, "recordData", 1024 * 2, NULL, 2, &taskHandler1);
+  xTaskCreate(transmitData, "transmitData", 1024 * 2, NULL, 1, &taskHandler2);
 }
 
 void finishRecording(){
   Serial.println("*** Recording End ***");
   vTaskDelete(taskHandler1);
-  xTaskCreate(deviceCancel, "deviceCancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
+  flag = 0;
+  //xTaskCreate(deviceCancel, "deviceCancel", configMINIMAL_STACK_SIZE, NULL, 1, NULL);
 }
 
 void deviceCancel(void *arg){
@@ -133,19 +137,29 @@ void deviceCancel(void *arg){
 
 void recordData(void *arg){
   Serial.println("Test1");
-  unsigned long int time = millis();
-  while(1){
-    if( (millis() - time) / 1000.00 >= 1 / (float)sampleRatePerSec){
-      // Serial.print(millis() - time);
+  timer = micros();
+  startTime = millis();
+  
+  counter = 0;
+  while(flag){
+    //if(   ((micros() - timer) / 1000.00)/1000.00 >= 1 / (float)(sampleRatePerSec)){//+10.7
+      // Serial.print((micros() - time) / 1000.00);
+      // Serial.print(", ");
+      // Serial.print(  counter / (float)((millis() - startTime)/1000.00)  );
+      // Serial.print(", ");
+      // Serial.print(counter);
+      // Serial.print(", ");
+      // Serial.print((float)((millis() - startTime)/1000.00));
       // Serial.print(", ");
       // Serial.println(bufferQueue.size());
 
-      time = millis();
+      timer = micros();
       int sample = adc1_get_raw(ADC1_CHANNEL_7);
       // Serial.print("R");
       //Serial.println(sample);
+      counter++;
       bufferQueue.push((uint32_t)sample);
-    }
+    //}
     vTaskDelay(portTICK_PERIOD_MS);
 
   }
@@ -154,31 +168,42 @@ void recordData(void *arg){
 
 void transmitData(void *arg){
   Serial.println("Test2");
-  while (1) {
+  unsigned long int startTime2 = millis();
+  unsigned long int time2 = micros();
+
+  while (flag) {
     do{
     if(bufferQueue.size() > 0){
-    //unsigned long int time = micros();
 
-    int sample = (uint32_t)bufferQueue.front();
-    SerialBT.println(sample);
+    int sample = (uint32_t)bufferQueue.front();  
+
+    SerialBT.println(bufferQueue.size());
 
     //Serial.print("TS");
-    Serial.println(sample);
+    //Serial.println(sample);
 
     bufferQueue.pop();
 
-    // Serial.print((micros() - time)/1000);
+    // Serial.print(counter);
+    // Serial.print(", ");
+    // Serial.print((micros() - time2)/1000.00);
+    // Serial.print(", ");
+    // Serial.print(millis() - startTime);
+    // Serial.print(", ");
+    // Serial.print(counter / (((timer - startTime)/1000.00)/1000.00) );
     // Serial.print(", ");
     // Serial.println(bufferQueue.size());
+    
+    time2 = micros();
     }
     else{
       //Serial.print("TB");
       //Serial.println(bufferQueue.size());
     }
-    vTaskDelay(portTICK_PERIOD_MS);
+    vTaskDelay(portTICK_PERIOD_MS/2);
     } while (bufferQueue.size() > 0);
   }
-  SerialBT.println("***Transmition Done***");
+  Serial.println("***Transmition Done***");
   vTaskDelete(NULL);
 }
 

@@ -135,8 +135,11 @@ void recordData(void *arg){
   Serial.println("Test1");
   unsigned long int time = millis();
   while(1){
-    if(millis() - time >= 1 / sampleRatePerSec){
-      //Serial.println(millis() - time);
+    if( (millis() - time)/1000 >= 1 / sampleRatePerSec){
+      // Serial.print(millis() - time);
+      // Serial.print(", ");
+      // Serial.println(bufferQueue.size());
+
       time = millis();
       int sample = adc1_get_raw(ADC1_CHANNEL_7);
       // Serial.print("R");
@@ -152,23 +155,26 @@ void recordData(void *arg){
 void transmitData(void *arg){
   Serial.println("Test2");
   while (1) {
-      do
-      {
-        if(bufferQueue.size() > 0){
-        int sample = (uint32_t)bufferQueue.front();
-        SerialBT.println(sample);
-        Serial.println(bufferQueue.size());
-        
-        //Serial.print("TS");
-        //Serial.println(sample);
-        bufferQueue.pop();
-        }
-        else{
-          //Serial.print("TB");
-          //Serial.println(bufferQueue.size());
-        }
-      } while (bufferQueue.size() > 0);
-      vTaskDelay(portTICK_PERIOD_MS/2);
+    if(bufferQueue.size() > 0){
+    unsigned long int time = micros();
+
+    int sample = (uint32_t)bufferQueue.front();
+    SerialBT.println(sample);
+    //Serial.println(bufferQueue.size());
+
+    //Serial.print("TS");
+    Serial.println(sample);
+    
+    bufferQueue.pop();
+    // Serial.print((micros() - time)/1000);
+    // Serial.print(", ");
+    // Serial.println(bufferQueue.size());
+    }
+    else{
+      //Serial.print("TB");
+      //Serial.println(bufferQueue.size());
+    }
+    vTaskDelay(portTICK_PERIOD_MS/2);
   }
   vTaskDelete(NULL);
 }

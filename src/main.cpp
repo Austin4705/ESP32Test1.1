@@ -199,3 +199,38 @@ void transmitData(void *arg){
 void loop()
 {
 }
+
+
+
+public class turretAlgorithm {
+  public static int turretDegFunction(int min, int max, int current, int destination){
+
+    //fix all the points on a scale from 0 to 360
+    min = fixAngle(min);
+    max = fixAngle(max);
+    current = fixAngle(current);
+    destination = fixAngle(destination);
+
+    //find the two possible values for the length of the rotation
+    int distance = Math.abs(destination - current);
+    int revserseDistance = 360 - distance;
+
+    //figure out which one and which sign
+    
+
+
+    return   
+  }
+
+  public static int fixAngle(int x){
+    //convernt all angles to positive
+    if(x < 0){
+      
+    }
+    //convernt to 0-360 val
+    if(x > 360)
+      x %= 360;
+    
+    return x;
+  }
+}
